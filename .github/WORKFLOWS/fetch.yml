@@ -1,0 +1,50 @@
+name: fetch-nrc-pdfs
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download PDFs
+        run: |
+          mkdir -p reports
+          ok=0; fail=0
+          for item in \
+            "2021 ML2413/ML24134A119" \
+            "2020 ML2316/ML23164A219" \
+            "2019 ML2126/ML21266A422" \
+            "2018 ML2032/ML20325A229" \
+            "2017 ML1931/ML19317E480" \
+            "2016 ML1927/ML19275J127" \
+            "2015 ML1909/ML19099A385" \
+            "2014 ML1833/ML18331A038" \
+            "2013 ML1823/ML18234A117" \
+            "2012 ML1823/ML18234A103" \
+            "2011 ML1823/ML18234A088" \
+            "2010 ML1815/ML18151A529" \
+            "2009 ML1321/ML13218A300" \
+            "2008 ML1036/ML103620452" \
+            "2007 ML1036/ML103620453" ; do
+            year=${item%% *}
+            path=${item#* }
+            url="https://www.nrc.gov/docs/${path}.pdf"
+            curl -sSL --retry 3 --retry-delay 5 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" "$url" -o "reports/effluent_${year}.pdf"
+            if head -c 4 "reports/effluent_${year}.pdf" | grep -q "%PDF"; then
+              ok=$((ok+1)); echo "OK $year $(stat -c%s reports/effluent_${year}.pdf)"
+            else
+              fail=$((fail+1)); echo "FAIL $year"; rm -f "reports/effluent_${year}.pdf"
+            fi
+          done
+          echo "downloaded=$ok failed=$fail"
+      - name: Commit and push
+        run: |
+          git config user.name "nrc-fetch-bot"
+          git config user.email "bot@example.com"
+          git add reports
+          git commit -m "Add NRC annual effluent reports 2007-2021" || echo "nothing to commit"
+          git push
